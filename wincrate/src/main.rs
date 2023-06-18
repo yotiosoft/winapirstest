@@ -66,11 +66,13 @@ fn main() {
             ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer.0 as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
 
             let proc_name = String::from_utf16_lossy(&v1).trim_matches(char::from(0)).to_string();
-
+            let proc_id = spi.UniqueProcessId;
+            
             println!("---------------------");
             println!("next entry offset: {}", spi.NextEntryOffset);
             println!("process handle: {:#x?}", spi.UniqueProcessId);
             println!("image name: {:#x?}", proc_name);
+            println!("process id: {}", proc_id.0);
 
             baseaddress = next_address as *mut c_void;
         }   
