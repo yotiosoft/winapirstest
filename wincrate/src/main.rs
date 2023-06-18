@@ -1,9 +1,11 @@
 use windows::Win32::System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION;
-use windows::Win32::Foundation::HANDLE;
 use winapi::shared::ntdef::{ HRESULT, NTSTATUS, NT_SUCCESS };
 use winapi::ctypes::*;
 use winapi::um::memoryapi::*;
 use winapi::um::processthreadsapi::*;
+use winapi::um::winnt::{HANDLE,
+    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PROCESS_ALL_ACCESS
+};
 use ntapi::ntexapi::*;
 
 fn FillStructureFromMemory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, process_handle: *mut c_void) {
@@ -73,6 +75,17 @@ fn main() {
             println!("process handle: {:#x?}", spi.UniqueProcessId);
             println!("image name: {:#x?}", proc_name);
             println!("process id: {}", proc_id.0);
+
+            // そのプロセスがロックしているファイルを列挙する
+            let proc_hand = OpenProcess(PROCESS_ALL_ACCESS, 0, proc_id.0 as u32);
+            println!("proc_hand: {:#x?}", proc_hand);
+
+            if proc_hand == 0 {
+                println!("OpenProcess failed");
+                continue;
+            }
+
+            
 
             baseaddress = next_address as *mut c_void;
         }   
