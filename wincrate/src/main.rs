@@ -65,7 +65,7 @@ fn main() {
             let mut v1: Vec<u16> = vec![0; spi.ImageName.Length as usize];
             ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer.0 as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
 
-            let proc_name = String::from_utf16_lossy(&v1);
+            let proc_name = String::from_utf16_lossy(&v1).trim_matches(char::from(0)).to_string();
 
             println!("---------------------");
             println!("next entry offset: {}", spi.NextEntryOffset);
