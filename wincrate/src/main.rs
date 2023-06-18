@@ -62,9 +62,15 @@ fn main() {
 
             FillStructureFromMemory(&mut spi, next_address as *const c_void, GetCurrentProcess());
             
+            let mut v1: Vec<u16> = vec![0; spi.ImageName.Length as usize];
+            ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer.0 as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
+
+            let proc_name = String::from_utf16_lossy(&v1);
+
+            println!("---------------------");
             println!("next entry offset: {}", spi.NextEntryOffset);
             println!("process handle: {:#x?}", spi.UniqueProcessId);
-            println!("image name: {:#x?}", spi.ImageName);
+            println!("image name: {:#x?}", proc_name);
 
             baseaddress = next_address as *mut c_void;
         }   
