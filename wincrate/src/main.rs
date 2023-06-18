@@ -50,6 +50,21 @@ fn main() {
 
         println!("{:#x?}", spi);
 
+        while true {
+            if spi.NextEntryOffset == 0 {
+                break;
+            }
+
+            let mut previous_addres = baseaddress;
+            let mut next_address = baseaddress as isize + spi.NextEntryOffset as isize;
+
+            FillStructureFromMemory(&mut spi, next_address as *const c_void, GetCurrentProcess());
+            
+            println!("{:#x?}", spi);
+
+            baseaddress = next_address as *mut c_void;
+        }   
+
         VirtualFree(baseaddress, 0x0, 0x8000);
     }
 }
