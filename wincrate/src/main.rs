@@ -48,7 +48,9 @@ fn main() {
         let a = GetCurrentProcess();
         FillStructureFromMemory(&mut spi, baseaddress as *const c_void, GetCurrentProcess());
 
-        println!("{:#x?}", spi);
+        println!("next entry offset: {}", spi.NextEntryOffset);
+        println!("process handle: {:#x?}", spi.UniqueProcessId);
+        println!("image name: {:#x?}", spi.ImageName);
 
         while true {
             if spi.NextEntryOffset == 0 {
@@ -60,7 +62,9 @@ fn main() {
 
             FillStructureFromMemory(&mut spi, next_address as *const c_void, GetCurrentProcess());
             
-            println!("{:#x?}", spi);
+            println!("next entry offset: {}", spi.NextEntryOffset);
+            println!("process handle: {:#x?}", spi.UniqueProcessId);
+            println!("image name: {:#x?}", spi.ImageName);
 
             baseaddress = next_address as *mut c_void;
         }   
