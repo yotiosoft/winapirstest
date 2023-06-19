@@ -8,11 +8,11 @@ use winapi::um::winnt::{HANDLE,
 };
 use ntapi::ntexapi::*;
 use ntapi::ntexapi::SYSTEM_HANDLE_TABLE_ENTRY_INFO;
-use ntapi::ntexapi::SYSTEM_HANDLE_INFORMATION;
 
-struct SYSTEM_HANDLE_INFORMATION {
-    pub NumberOfHandles: u32,
-    pub Handles: [SYSTEM_HANDLE_TABLE_ENTRY_INFO; 1],
+#[repr(C)]
+pub struct SYSTEM_HANDLE_INFORMATION {
+    pub number_of_handles: u32,
+    pub handles: Vec<SYSTEM_HANDLE_TABLE_ENTRY_INFO>,
 }
 
 fn FillStructureFromMemory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, process_handle: *mut c_void) {
@@ -53,26 +53,22 @@ fn main() {
 
         println!("baseaddress: {:x?}", baseaddress);
 
-        let mut spi = SYSTEM_HANDLE_INFORMATION {
-            NumberOfHandles: 0,
-            Handles: [SYSTEM_HANDLE_TABLE_ENTRY_INFO {
-                UniqueProcessId: 0,
-                CreatorBackTraceIndex: 0,
-                ObjectTypeIndex: 0,
-                HandleAttributes: 0,
-                HandleValue: 0,
-                Object: 0 as *mut c_void,
-                GrantedAccess: 0,
-            }; 1],
-        };    // from windows crate
+        let mut spi: SYSTEM_HANDLE_INFORMATION = SYSTEM_HANDLE_INFORMATION {
+            number_of_handles: 0,
+            handles: Vec::new(),
+        };
         
         let a = GetCurrentProcess();
         FillStructureFromMemory(&mut spi, baseaddress as *const c_void, GetCurrentProcess());
+        spi.handles = Vec::with_capacity(spi.number_of_handles as usize);
+        FillStructureFromMemory(&mut spi.handles, (baseaddress as usize + 4) as *const c_void, GetCurrentProcess());
 
-        for i in 0..spi.NumberOfHandles {
-            if spi.Handles[i].UniqueProcessId == GetCurrentProcessId() {
-                println!("Handle: {:#x?}", spi.Handles[i].HandleValue);
-            }
+        println!("spi.NumberOfHandles: {}", spi.number_of_handles);
+
+        for i in 0..1 as usize {
+            //if spi.Handles[i].UniqueProcessId as u32 == GetCurrentProcessId() {
+                println!("Handle: {:#x?} pid: {:#x}", spi.handles[i].HandleValue, spi.handles[i].UniqueProcessId);
+            //}
         }
 
         VirtualFree(baseaddress, 0x0, 0x8000);
