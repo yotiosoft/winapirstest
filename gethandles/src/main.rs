@@ -3,8 +3,9 @@ use winapi::shared::ntdef::{ HRESULT, NTSTATUS, NT_SUCCESS };
 use winapi::ctypes::*;
 use winapi::um::memoryapi::*;
 use winapi::um::processthreadsapi::*;
+use winapi::um::handleapi::DuplicateHandle;
 use winapi::um::winnt::{HANDLE,
-    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PROCESS_ALL_ACCESS
+    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PROCESS_DUP_HANDLE, DUPLICATE_SAME_ACCESS
 };
 use ntapi::ntexapi::*;
 use ntapi::ntexapi::SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX;
@@ -65,8 +66,15 @@ fn main() {
 
             let mut handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX = std::mem::zeroed();
             FillStructureFromMemory(&mut handle, (baseaddress as usize + (offset + i * std::mem::size_of::<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX>())) as *const c_void, GetCurrentProcess());
-            if handle.UniqueProcessId as u32 == GetCurrentProcessId() {
-                println!("Handle: {:#x?} pid: {:#x}", handle.Object, handle.UniqueProcessId);
+            if handle.ObjectTypeIndex == 0x18 {
+                println!("Handle: {:#x?} pid: {:#x}", handle.ObjectTypeIndex, handle.UniqueProcessId);
+
+                // プロセスを開く
+                let proc_hand = OpenProcess(PROCESS_DUP_HANDLE, 0, handle.UniqueProcessId as u32);
+                if proc_hand != 0 as *mut c_void {
+                    let mut file_hand: HANDLE = std::mem::zeroed();
+                    DuplicateHandle(proc_hand, handle.HandleValue as *mut c_void, GetCurrentProcess(), file_hand as *mut *mut c_void, 0, 0, DUPLICATE_SAME_ACCESS);
+                }
             }
         }
 
