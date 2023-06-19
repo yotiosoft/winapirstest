@@ -7,6 +7,13 @@ use winapi::um::winnt::{HANDLE,
     MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PROCESS_ALL_ACCESS
 };
 use ntapi::ntexapi::*;
+use ntapi::ntexapi::SYSTEM_HANDLE_TABLE_ENTRY_INFO;
+use ntapi::ntexapi::SYSTEM_HANDLE_INFORMATION;
+
+struct SYSTEM_HANDLE_INFORMATION {
+    pub NumberOfHandles: u32,
+    pub Handles: [SYSTEM_HANDLE_TABLE_ENTRY_INFO; 1],
+}
 
 fn FillStructureFromMemory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, process_handle: *mut c_void) {
     unsafe {
@@ -23,7 +30,7 @@ fn main() {
         let mut baseaddress = VirtualAlloc(std::ptr::null_mut(), info_length as usize, 0x1000, 0x40);
 
         let mut tries = 0;
-        while true {
+        loop {
             let res = NtQuerySystemInformation(0x10, baseaddress, info_length, &mut info_length);
 
             println!("res: {:x}", res);
@@ -46,49 +53,27 @@ fn main() {
 
         println!("baseaddress: {:x?}", baseaddress);
 
-        let mut spi = SYSTEM_PROCESS_INFORMATION::default();    // from windows crate
+        let mut spi = SYSTEM_HANDLE_INFORMATION {
+            NumberOfHandles: 0,
+            Handles: [SYSTEM_HANDLE_TABLE_ENTRY_INFO {
+                UniqueProcessId: 0,
+                CreatorBackTraceIndex: 0,
+                ObjectTypeIndex: 0,
+                HandleAttributes: 0,
+                HandleValue: 0,
+                Object: 0 as *mut c_void,
+                GrantedAccess: 0,
+            }; 1],
+        };    // from windows crate
+        
         let a = GetCurrentProcess();
         FillStructureFromMemory(&mut spi, baseaddress as *const c_void, GetCurrentProcess());
 
-        println!("next entry offset: {}", spi.NextEntryOffset);
-        println!("process handle: {:#x?}", spi.UniqueProcessId);
-        println!("image name: {:#x?}", spi.ImageName);
-
-        while true {
-            if spi.NextEntryOffset == 0 {
-                break;
+        for i in 0..spi.NumberOfHandles {
+            if spi.Handles[i].UniqueProcessId == GetCurrentProcessId() {
+                println!("Handle: {:#x?}", spi.Handles[i].HandleValue);
             }
-
-            let mut previous_addres = baseaddress;
-            let mut next_address = baseaddress as isize + spi.NextEntryOffset as isize;
-
-            FillStructureFromMemory(&mut spi, next_address as *const c_void, GetCurrentProcess());
-            
-            let mut v1: Vec<u16> = vec![0; spi.ImageName.Length as usize];
-            ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer.0 as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
-
-            let proc_name = String::from_utf16_lossy(&v1).trim_matches(char::from(0)).to_string();
-            let proc_id = spi.UniqueProcessId;
-            
-            println!("---------------------");
-            println!("next entry offset: {}", spi.NextEntryOffset);
-            println!("process handle: {:#x?}", spi.UniqueProcessId);
-            println!("image name: {:#x?}", proc_name);
-            println!("process id: {}", proc_id.0);
-
-            // そのプロセスがロックしているファイルを列挙する
-            let proc_hand = OpenProcess(PROCESS_ALL_ACCESS, 0, proc_id.0 as u32);
-            println!("proc_hand: {:#x?}", proc_hand);
-
-            if proc_hand == 0 as *mut c_void {
-                println!("OpenProcess failed");
-                continue;
-            }
-
-            
-
-            baseaddress = next_address as *mut c_void;
-        }   
+        }
 
         VirtualFree(baseaddress, 0x0, 0x8000);
     }
