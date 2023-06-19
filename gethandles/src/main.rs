@@ -3,7 +3,7 @@ use winapi::shared::ntdef::{ HRESULT, NTSTATUS, NT_SUCCESS };
 use winapi::ctypes::*;
 use winapi::um::memoryapi::*;
 use winapi::um::processthreadsapi::*;
-use winapi::um::handleapi::DuplicateHandle;
+use winapi::um::handleapi::{ DuplicateHandle, CloseHandle, INVALID_HANDLE_VALUE };
 use winapi::um::winnt::{HANDLE,
     MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PROCESS_DUP_HANDLE, DUPLICATE_SAME_ACCESS
 };
@@ -71,9 +71,23 @@ fn main() {
 
                 // プロセスを開く
                 let proc_hand = OpenProcess(PROCESS_DUP_HANDLE, 0, handle.UniqueProcessId as u32);
-                if proc_hand != 0 as *mut c_void {
+                if proc_hand != INVALID_HANDLE_VALUE {
                     let mut file_hand: HANDLE = std::mem::zeroed();
-                    DuplicateHandle(proc_hand, handle.HandleValue as *mut c_void, GetCurrentProcess(), file_hand as *mut *mut c_void, 0, 0, DUPLICATE_SAME_ACCESS);
+                    if DuplicateHandle(proc_hand, handle.HandleValue as *mut c_void, GetCurrentProcess(), file_hand as *mut *mut c_void, 0, 0, DUPLICATE_SAME_ACCESS) == 0 {
+                        println!("DuplicateHandle failed");
+                        continue;
+                    }
+
+                    CloseHandle(proc_hand);
+
+                    if file_hand != INVALID_HANDLE_VALUE {
+                        let mut path: [u16; 0x100] = [0; 0x100];
+                        let res = GetFinalPathNameByHandleW(file_hand, path.as_mut_ptr(), 0x100, 0);
+                        if res != 0 {
+                            println!("path: {:?}", std::ffi::OsString::from_wide(&path));
+                        }
+                        CloseHandle(file_hand);
+                    }
                 }
             }
         }
