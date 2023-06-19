@@ -12,15 +12,15 @@ use ntapi::ntexapi::SYSTEM_HANDLE_TABLE_ENTRY_INFO;
 #[repr(C)]
 pub struct SYSTEM_HANDLE_INFORMATION {
     pub number_of_handles: u32,
-    pub handles: Vec<SYSTEM_HANDLE_TABLE_ENTRY_INFO>,
+    pub handles: [SYSTEM_HANDLE_TABLE_ENTRY_INFO; 10000],
 }
 
 fn FillStructureFromMemory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, process_handle: *mut c_void) {
     unsafe {
         let mut bytes_read: usize = 0;
         let res = ReadProcessMemory(process_handle, memory_ptr, struct_ptr as *mut _ as *mut c_void, std::mem::size_of::<T>(), &mut bytes_read);
-        println!("res: {:x}", res);
-        println!("bytes_read: {}", bytes_read);
+        //println!("res: {:x}", res);
+        //println!("bytes_read: {}", bytes_read);
     }
 }
 
@@ -53,22 +53,23 @@ fn main() {
 
         println!("baseaddress: {:x?}", baseaddress);
 
-        let mut spi: SYSTEM_HANDLE_INFORMATION = SYSTEM_HANDLE_INFORMATION {
-            number_of_handles: 0,
-            handles: Vec::new(),
-        };
+        let mut spi: SYSTEM_HANDLE_INFORMATION = std::mem::zeroed();
         
         let a = GetCurrentProcess();
         FillStructureFromMemory(&mut spi, baseaddress as *const c_void, GetCurrentProcess());
-        spi.handles = Vec::with_capacity(spi.number_of_handles as usize);
-        FillStructureFromMemory(&mut spi.handles, (baseaddress as usize + 4) as *const c_void, GetCurrentProcess());
 
         println!("spi.NumberOfHandles: {}", spi.number_of_handles);
 
-        for i in 0..1 as usize {
+        for i in 0..spi.number_of_handles as usize {
             //if spi.Handles[i].UniqueProcessId as u32 == GetCurrentProcessId() {
-                println!("Handle: {:#x?} pid: {:#x}", spi.handles[i].HandleValue, spi.handles[i].UniqueProcessId);
+            //    println!("Handle: {:#x?} pid: {:#x}", spi.handles[i].HandleValue, spi.handles[i].UniqueProcessId);
             //}
+
+            let mut handle: SYSTEM_HANDLE_TABLE_ENTRY_INFO = std::mem::zeroed();
+            FillStructureFromMemory(&mut handle, (baseaddress as usize + (8 + i * std::mem::size_of::<SYSTEM_HANDLE_TABLE_ENTRY_INFO>())) as *const c_void, GetCurrentProcess());
+            if handle.UniqueProcessId as u32 == GetCurrentProcessId() {
+                println!("Handle: {:#x?} pid: {:#x}", handle.HandleValue, handle.UniqueProcessId);
+            }
         }
 
         VirtualFree(baseaddress, 0x0, 0x8000);
