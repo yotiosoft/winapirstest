@@ -1,4 +1,3 @@
-use windows::Win32::System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION;
 use winapi::shared::ntdef::{ HRESULT, NTSTATUS, NT_SUCCESS };
 use winapi::ctypes::*;
 use winapi::um::memoryapi::*;
@@ -46,13 +45,13 @@ fn main() {
 
         println!("baseaddress: {:x?}", baseaddress);
 
-        let mut spi = SYSTEM_PROCESS_INFORMATION::default();    // from windows crate
+        let mut spi: SYSTEM_PROCESS_INFORMATION = std::mem::zeroed();
         let a = GetCurrentProcess();
         FillStructureFromMemory(&mut spi, baseaddress as *const c_void, GetCurrentProcess());
 
         println!("next entry offset: {}", spi.NextEntryOffset);
         println!("process handle: {:#x?}", spi.UniqueProcessId);
-        println!("image name: {:#x?}", spi.ImageName);
+        println!("image name: {:#x?}", spi.ImageName.Buffer);
 
         while true {
             if spi.NextEntryOffset == 0 {
@@ -65,17 +64,17 @@ fn main() {
             FillStructureFromMemory(&mut spi, next_address as *const c_void, GetCurrentProcess());
             
             let mut v1: Vec<u16> = vec![0; spi.ImageName.Length as usize];
-            ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer.0 as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
+            ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
 
             let proc_name = String::from_utf16_lossy(&v1).trim_matches(char::from(0)).to_string();
-            let proc_id = spi.UniqueProcessId;
+            let proc_id = spi.UniqueProcessId as u32;
             
             //println!("---------------------");
             //println!("next entry offset: {}", spi.NextEntryOffset);
             //println!("process handle: {:#x?}", spi.UniqueProcessId);
             //println!("image name: {:#x?}", proc_name);
             //println!("process id: {}", proc_id.0);
-            println!("pid {} - {:#x?}", proc_id.0, proc_name);
+            println!("pid {} - {:#x?}", proc_id, proc_name);
 
             baseaddress = next_address as *mut c_void;
         }   
