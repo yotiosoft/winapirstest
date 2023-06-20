@@ -12,8 +12,8 @@ fn FillStructureFromMemory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, pro
     unsafe {
         let mut bytes_read: usize = 0;
         let res = ReadProcessMemory(process_handle, memory_ptr, struct_ptr as *mut _ as *mut c_void, std::mem::size_of::<T>(), &mut bytes_read);
-        println!("res: {:x}", res);
-        println!("bytes_read: {}", bytes_read);
+        //println!("res: {:x}", res);
+        //println!("bytes_read: {}", bytes_read);
     }
 }
 
@@ -70,22 +70,12 @@ fn main() {
             let proc_name = String::from_utf16_lossy(&v1).trim_matches(char::from(0)).to_string();
             let proc_id = spi.UniqueProcessId;
             
-            println!("---------------------");
-            println!("next entry offset: {}", spi.NextEntryOffset);
-            println!("process handle: {:#x?}", spi.UniqueProcessId);
-            println!("image name: {:#x?}", proc_name);
-            println!("process id: {}", proc_id.0);
-
-            // そのプロセスがロックしているファイルを列挙する
-            let proc_hand = OpenProcess(PROCESS_ALL_ACCESS, 0, proc_id.0 as u32);
-            println!("proc_hand: {:#x?}", proc_hand);
-
-            if proc_hand == 0 {
-                println!("OpenProcess failed");
-                continue;
-            }
-
-            
+            //println!("---------------------");
+            //println!("next entry offset: {}", spi.NextEntryOffset);
+            //println!("process handle: {:#x?}", spi.UniqueProcessId);
+            //println!("image name: {:#x?}", proc_name);
+            //println!("process id: {}", proc_id.0);
+            println!("pid {} - {:#x?}", proc_id.0, proc_name);
 
             baseaddress = next_address as *mut c_void;
         }   
