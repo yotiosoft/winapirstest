@@ -14,24 +14,20 @@ fn fill_structure_from_memory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, 
     }
 }
 
-fn main() {
+// SystemProcessInformation を buffer に取得
+fn get_system_process_information(mut buffer_size: u32) -> *mut c_void {
     unsafe {
-        let mut info_length: u32 = 0x10000;
-        let mut base_address = VirtualAlloc(std::ptr::null_mut(), info_length as usize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        let mut base_address = VirtualAlloc(std::ptr::null_mut(), buffer_size as usize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
         let tries = 0;
         let max_tries = 5;
         loop {
-            // システム情報を取得
-            // SystemProcessInformation : 各プロセスの情報
-            // base_address              : 格納先
-            // info_length              : 格納先のサイズ
-            // &mut info_length         : 実際に取得したサイズ
-            let res = NtQuerySystemInformation(SystemProcessInformation, base_address, info_length, &mut info_length);
-
-            println!("res: {:x}", res);
-            println!("info_length: {}", info_length);
-            println!("base_address: {:x?}", base_address);
+            // プロセス情報を取得
+            // SystemProcessInformation : 各プロセスの情報（オプション定数）
+            // base_address             : 格納先
+            // buffer_size              : 格納先のサイズ
+            // &mut buffer_size         : 実際に取得したサイズ
+            let res = NtQuerySystemInformation(SystemProcessInformation, base_address, buffer_size, &mut buffer_size);
             
             if res == 0 {
                 break;
@@ -42,11 +38,17 @@ fn main() {
 
             // realloc
             VirtualFree(base_address, 0, MEM_RELEASE);
-            base_address = VirtualAlloc(std::ptr::null_mut(), info_length as usize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+            base_address = VirtualAlloc(std::ptr::null_mut(), buffer_size as usize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
         }
 
-        println!("base_address: {:x?}", base_address);
-        println!("---------------------------------");
+        return base_address;
+    }
+}
+
+fn main() {
+    unsafe {
+        // プロセス情報を取得
+        let base_address = get_system_process_information(0x10000);
 
         // base_address に取得したプロセス情報を SYSTEM_PROCESS_INFORMATION 構造体 system_process_info に格納
         let mut system_process_info: SYSTEM_PROCESS_INFORMATION = std::mem::zeroed();
