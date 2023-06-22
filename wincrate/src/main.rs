@@ -1,84 +1,89 @@
-use winapi::shared::ntdef::{ HRESULT, NTSTATUS, NT_SUCCESS };
 use winapi::ctypes::*;
 use winapi::um::memoryapi::*;
 use winapi::um::processthreadsapi::*;
-use winapi::um::winnt::{HANDLE,
-    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PROCESS_ALL_ACCESS
-};
+use winapi::um::winnt::{ MEM_COMMIT, MEM_RELEASE, PAGE_EXECUTE_READWRITE };
+use winapi::um::errhandlingapi::GetLastError;
 use ntapi::ntexapi::*;
 
-fn FillStructureFromMemory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, process_handle: *mut c_void) {
+// 構造体にメモリから値を取得して格納する
+fn fill_structure_from_memory<T>(struct_ptr: &mut T, memory_ptr: *const c_void, process_handle: *mut c_void) -> i32 {
     unsafe {
         let mut bytes_read: usize = 0;
         let res = ReadProcessMemory(process_handle, memory_ptr, struct_ptr as *mut _ as *mut c_void, std::mem::size_of::<T>(), &mut bytes_read);
-        //println!("res: {:x}", res);
-        //println!("bytes_read: {}", bytes_read);
+        return res;
     }
 }
 
 fn main() {
     unsafe {
         let mut info_length: u32 = 0x10000;
-        let mut baseaddress = VirtualAlloc(std::ptr::null_mut(), info_length as usize, 0x1000, 0x40);
+        let mut base_address = VirtualAlloc(std::ptr::null_mut(), info_length as usize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-        let mut tries = 0;
-        while true {
-            let res = NtQuerySystemInformation(0x5, baseaddress, info_length, &mut info_length);
+        let tries = 0;
+        let max_tries = 5;
+        loop {
+            // システム情報を取得
+            // SystemProcessInformation : 各プロセスの情報
+            // base_address              : 格納先
+            // info_length              : 格納先のサイズ
+            // &mut info_length         : 実際に取得したサイズ
+            let res = NtQuerySystemInformation(SystemProcessInformation, base_address, info_length, &mut info_length);
 
             println!("res: {:x}", res);
             println!("info_length: {}", info_length);
-            println!("tries: {}", tries);
-
+            println!("base_address: {:x?}", base_address);
+            
             if res == 0 {
                 break;
             }
-            if tries == 5 {
+            if tries == max_tries {
                 break;
             }
 
-            VirtualFree(baseaddress, 0x0, 0x8000);
-
-            baseaddress = VirtualAlloc(std::ptr::null_mut(), info_length as usize, 0x1000, 0x40);
-
-            tries += 1;
+            // realloc
+            VirtualFree(base_address, 0, MEM_RELEASE);
+            base_address = VirtualAlloc(std::ptr::null_mut(), info_length as usize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
         }
 
-        println!("baseaddress: {:x?}", baseaddress);
+        println!("base_address: {:x?}", base_address);
+        println!("---------------------------------");
 
-        let mut spi: SYSTEM_PROCESS_INFORMATION = std::mem::zeroed();
-        let a = GetCurrentProcess();
-        FillStructureFromMemory(&mut spi, baseaddress as *const c_void, GetCurrentProcess());
+        // base_address に取得したプロセス情報を SYSTEM_PROCESS_INFORMATION 構造体 system_process_info に格納
+        let mut system_process_info: SYSTEM_PROCESS_INFORMATION = std::mem::zeroed();
 
-        println!("next entry offset: {}", spi.NextEntryOffset);
-        println!("process handle: {:#x?}", spi.UniqueProcessId);
-        println!("image name: {:#x?}", spi.ImageName.Buffer);
+        let mut next_address = base_address as isize;
+        // すべてのプロセス情報を取得
+        loop {
+            // 次のプロセス情報の格納先アドレス
+            next_address += system_process_info.NextEntryOffset as isize;
 
-        while true {
-            if spi.NextEntryOffset == 0 {
-                break;
+            // base_address の該当オフセット値から SYSTEM_PROCESS_INFORMATION 構造体の情報をプロセス1つ分取得
+            if fill_structure_from_memory(&mut system_process_info, next_address as *const c_void, GetCurrentProcess()) == 0 {
+                let err = GetLastError();
+                panic!("fill_structure_from_memory failed: {}", err);
             }
-
-            let mut previous_addres = baseaddress;
-            let mut next_address = baseaddress as isize + spi.NextEntryOffset as isize;
-
-            FillStructureFromMemory(&mut spi, next_address as *const c_void, GetCurrentProcess());
             
-            let mut v1: Vec<u16> = vec![0; spi.ImageName.Length as usize];
-            ReadProcessMemory(GetCurrentProcess(), spi.ImageName.Buffer as *const c_void, v1.as_mut_ptr() as *mut c_void, spi.ImageName.Length as usize, std::ptr::null_mut());
+            // プロセス名を取得
+            let mut image_name_vec: Vec<u16> = vec![0; system_process_info.ImageName.Length as usize];
+            ReadProcessMemory(
+                GetCurrentProcess(), system_process_info.ImageName.Buffer as *const c_void, image_name_vec.as_mut_ptr() as *mut c_void, 
+                system_process_info.ImageName.Length as usize, std::ptr::null_mut()
+            );
+            // \0 が含まれているので除去
+            let proc_name = String::from_utf16_lossy(&image_name_vec).trim_matches(char::from(0)).to_string();
 
-            let proc_name = String::from_utf16_lossy(&v1).trim_matches(char::from(0)).to_string();
-            let proc_id = spi.UniqueProcessId as u32;
+            // プロセスIDを取得
+            let proc_id = system_process_info.UniqueProcessId as u32;
             
-            //println!("---------------------");
-            //println!("next entry offset: {}", spi.NextEntryOffset);
-            //println!("process handle: {:#x?}", spi.UniqueProcessId);
-            //println!("image name: {:#x?}", proc_name);
-            //println!("process id: {}", proc_id.0);
+            // プロセス名とプロセスIDを表示
             println!("pid {} - {:#x?}", proc_id, proc_name);
 
-            baseaddress = next_address as *mut c_void;
+            // すべてのプロセス情報を取得したら終了
+            if system_process_info.NextEntryOffset == 0 {
+                break;
+            }
         }   
 
-        VirtualFree(baseaddress, 0x0, 0x8000);
+        VirtualFree(base_address, 0x0, MEM_RELEASE);
     }
 }
