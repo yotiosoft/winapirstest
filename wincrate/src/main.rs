@@ -71,7 +71,7 @@ fn main() {
                 GetCurrentProcess(), system_process_info.ImageName.Buffer as *const c_void, image_name_vec.as_mut_ptr() as *mut c_void, 
                 system_process_info.ImageName.Length as usize, std::ptr::null_mut()
             );
-            // \0 が含まれているので除去
+            // \0 を除去
             let proc_name = String::from_utf16_lossy(&image_name_vec).trim_matches(char::from(0)).to_string();
 
             // プロセスIDを取得
